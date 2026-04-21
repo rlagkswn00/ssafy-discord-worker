@@ -1,0 +1,19 @@
+{
+  "discord": {
+    "공지": "https://discord.com/api/webhooks/your-notice-webhook",
+    "취업정보": "https://discord.com/api/webhooks/your-job-webhook",
+    "행사": "https://discord.com/api/webhooks/your-event-webhook",
+    "밥": "https://discord.com/api/webhooks/your-meal-webhook"
+  },
+  "sources": {
+    "mattermost-source-token": {
+      "category": "공지",
+      "label": "Mattermost Channel Label"
+    }
+  },
+  "mmAuth": {
+    "baseUrl": "https://meeting.ssafy.com",
+    "loginId": "your-email@example.com",
+    "password": "your-password"
+  }
+}

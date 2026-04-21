@@ -1,0 +1,2 @@
+DISCORD_WEBHOOK_FRONTEND=https://discord.com/api/webhooks/your-frontend-webhook
+DISCORD_WEBHOOK_BACKEND=https://discord.com/api/webhooks/your-backend-webhook

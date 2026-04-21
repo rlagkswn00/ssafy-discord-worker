@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "maeil-mail-discord",
+  "main": "mail-cs.js",
+  "compatibility_date": "2026-04-21",
+
+  "triggers": {
+    "crons": ["0 0 * * 0-4"]
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "MAEIL_KV",
+      "id": "mail-cs-kv"
+    }
+  ]
+}
