@@ -90,12 +90,32 @@ export default {
         return new Response("error: webhook not found", { status: 500 });
       }
 
+      const cleanedText = normalizeMattermostText(text);
+
+      // [Gemini AI 스마트 스팸 검열 레이어]
+      const aiResult = await checkMessageWithGemini(cleanedText, env);
+      if (aiResult.decision === "SPAM") {
+        console.log("========== AI SPAM DETECTED - MESSAGE BLOCKED ==========");
+        console.log(
+          JSON.stringify(
+            {
+              sourceLabel: source.label,
+              category: source.category,
+              channelName,
+              reason: aiResult.reason,
+              preview: cleanedText.slice(0, 150)
+            },
+            null,
+            2
+          )
+        );
+        return new Response("ignored", { status: 200 });
+      }
+
       let mmLink = "";
       if (teamDomain && postId) {
         mmLink = `https://meeting.ssafy.com/${teamDomain}/pl/${postId}`;
       }
-
-      const cleanedText = normalizeMattermostText(text);
 
       const fullContent = buildDiscordContent({
         userName,
@@ -337,6 +357,102 @@ export default {
     }
   }
 };
+
+async function checkMessageWithGemini(text, env) {
+  if (!env.GEMINI_API_KEY) {
+    console.log("========== GEMINI API KEY NOT FOUND - GRACEFUL FALLBACK (PASS) ==========");
+    return { decision: "PASS", reason: "API key environment variable is missing" };
+  }
+
+  if (!text || !text.trim()) {
+    return { decision: "PASS", reason: "Empty message text" };
+  }
+
+  try {
+    const model = "gemini-1.5-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+
+    const systemPrompt = `너는 SSAFY 15기 서울 13반 디스코드 채널의 공지사항 및 이벤트 연동 봇의 스마트 AI 검열관이다.
+이 봇은 교육생들에게 유용하고 가치 있는 공지사항, 공식 행사 알림, 채용/취업 정보, 혹은 주요 학사 일정 공유 메시지를 전달한다.
+다음 전달받은 Mattermost 원본 메시지를 분석하고 평가하여, 이것이 디스코드 채널에 공식 포워딩되기에 충분히 가치 있는 '공지/행사/정보 공유성' 글인지 판정해라.
+
+[판정 가이드라인]
+1. PASS (통과):
+   - 공식적인 공지사항, 설문조사 참여 독려, 공식 행사 세부 안내, 주간/월간 학사 일정 안내.
+   - 정보성 링크 공유, 강의 자료실 안내, 공식 취업/채용 정보 등 학습 및 교육과 긴밀한 주요 정보성 글.
+2. SPAM (차단):
+   - 단순 오타, 낙서, 의미 없는 글자 나열 (예: 'ㅁㄴㅇㄹ', '아아', '테스트').
+   - 성의 없는 너무 짧은 한두 마디 글 (단, 핵심 일정이 담긴 짧은 공지는 통과).
+   - 단순 리액션, 단순 인사 또는 단순 단답형 리액션 (예: '감사합니다!', '넵 확인했습니다', '화이팅!', '오우 좋네요').
+   - 개인 친목 도모 성격의 쓸데없는 잡담, 도배성 광고, 또는 학업/공지 목적과 전혀 무관한 개인 신변 잡기적 글.
+
+반드시 약속된 JSON 포맷을 따라서 정답을 반환해라.`;
+
+    const requestBody = {
+      contents: [
+        {
+          parts: [
+            { text: `System Prompt:\n${systemPrompt}\n\nInput Message:\n"${text}"` }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            decision: {
+              type: "STRING",
+              enum: ["PASS", "SPAM"]
+            },
+            reason: {
+              type: "STRING"
+            }
+          },
+          required: ["decision", "reason"]
+        }
+      }
+    };
+
+    console.log("========== SEND TO GEMINI ==========");
+    console.log(JSON.stringify({ textLength: text.length, textPreview: text.slice(0, 100) }, null, 2));
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.log(`Warning: Gemini API request failed (${response.status}): ${errText}`);
+      return { decision: "PASS", reason: `API response error (${response.status})` };
+    }
+
+    const resJson = await response.json();
+    const candidateText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!candidateText) {
+      console.log("Warning: Gemini returned empty candidates");
+      return { decision: "PASS", reason: "Empty candidate response" };
+    }
+
+    const result = JSON.parse(candidateText.trim());
+    console.log("========== GEMINI DECISION ==========");
+    console.log(JSON.stringify(result, null, 2));
+
+    return {
+      decision: result.decision || "PASS",
+      reason: result.reason || "Unknown reason"
+    };
+
+  } catch (err) {
+    console.log("Warning: Exception in Gemini AI moderation:", err.message);
+    return { decision: "PASS", reason: `Exception: ${err.message}` };
+  }
+}
 
 function buildDiscordContent({ userName, cleanedText, mmLink, source, fileCount }) {
   let content = "";

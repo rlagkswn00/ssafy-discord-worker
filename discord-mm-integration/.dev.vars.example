@@ -1,2 +1,3 @@
 # Copy the minified JSON from config.json or config.example.json into MM_CONFIG.
 MM_CONFIG='{"discord":{"공지":"https://discord.com/api/webhooks/your-notice-webhook","취업정보":"https://discord.com/api/webhooks/your-job-webhook","행사":"https://discord.com/api/webhooks/your-event-webhook","밥":"https://discord.com/api/webhooks/your-meal-webhook"},"sources":{"mattermost-source-token":{"category":"공지","label":"Mattermost Channel Label"}},"mmAuth":{"baseUrl":"https://meeting.ssafy.com","loginId":"your-email@example.com","password":"your-password"}}'
+GEMINI_API_KEY="your-gemini-api-key-here"
