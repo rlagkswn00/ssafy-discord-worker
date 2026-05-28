@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "ssafy-discord-mm-integration",
+  "name": "ssafy-15th-seoul-13",
   "main": "integration.js",
   "compatibility_date": "2026-04-21",
 
