@@ -369,7 +369,7 @@ async function checkMessageWithGemini(text, env) {
   }
 
   try {
-    const model = "gemini-1.5-flash";
+    const model = "gemini-2.5-flash";
     const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
 
     const systemPrompt = `너는 SSAFY 15기 서울 13반 디스코드 채널의 공지사항 및 이벤트 연동 봇의 스마트 AI 검열관이다.
