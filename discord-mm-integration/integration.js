@@ -43,23 +43,28 @@ export default {
       }
 
       if (source.category === "행사-이벤트") {
-        //행사-이벤트 주석처리
-        // const minEventLength = 80;
-        // const trimmedLength = text.trim().length;
+        const minEventLength = 80; // 필요 시 이 값을 늘리거나 줄일 수 있습니다.
+        const trimmedLength = text.trim().length;
 
-        // if (trimmedLength < minEventLength) {
-        //   console.log("========== SKIP SHORT EVENT MESSAGE ==========");
-        //   console.log(JSON.stringify({
-        //     sourceLabel: source.label,
-        //     category: source.category,
-        //     channelName,
-        //     trimmedLength,
-        //     minEventLength,
-        //     preview: text.slice(0, 120)
-        //   }, null, 2));
+        if (trimmedLength < minEventLength) {
+          console.log("========== SKIP SHORT EVENT MESSAGE ==========");
+          console.log(
+            JSON.stringify(
+              {
+                sourceLabel: source.label,
+                category: source.category,
+                channelName,
+                trimmedLength,
+                minEventLength,
+                preview: text.slice(0, 120)
+              },
+              null,
+              2
+            )
+          );
 
           return new Response("ignored", { status: 200 });
-        // }
+        }
       }
 
       const discordWebhook = config.discord[source.category];
