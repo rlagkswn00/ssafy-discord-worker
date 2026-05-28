@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ssafy-discord-mm-integration",
+  "main": "integration.js",
+  "compatibility_date": "2026-04-21",
+
+  "kv_namespaces": [
+    {
+      "binding": "MM_KV",
+      "id": "d3acc71d747c4faf8cb5a206ee1592c7"
+    }
+  ]
+}

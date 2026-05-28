@@ -136,21 +136,87 @@ export default {
           }
         }
       } else {
-        const mmToken = await loginToMattermost(config.mmAuth);
+        // [KV Caching & Self-Healing Session Logic]
+        let mmToken = null;
+        let isCachedTokenUsed = false;
 
-        console.log("========== MM LOGIN SUCCESS ==========");
-        console.log(JSON.stringify({
-          tokenPreview: mmToken.slice(0, 6) + "..."
-        }, null, 2));
+        // 1. KV 바인딩 존재 여부를 안전하게 검사하고 기존 세션 토큰 조회
+        if (env.MM_KV) {
+          try {
+            mmToken = await env.MM_KV.get("MM_SESSION_TOKEN");
+            if (mmToken) {
+              isCachedTokenUsed = true;
+              console.log("========== MM CACHED TOKEN FOUND ==========");
+              console.log(JSON.stringify({
+                tokenPreview: mmToken.slice(0, 6) + "..."
+              }, null, 2));
+            }
+          } catch (kvErr) {
+            console.log("Warning: Failed to read from Cloudflare KV", kvErr.message);
+          }
+        }
 
-        const files = [];
-        for (const fileId of fileIds) {
-          const downloaded = await downloadMattermostFile({
-            baseUrl: config.mmAuth.baseUrl,
-            bearerToken: mmToken,
-            fileId
-          });
-          files.push(downloaded);
+        // 2. 캐시된 토큰이 없는 경우 최초 로그인 수행 후 캐싱
+        if (!mmToken) {
+          console.log("========== MM NO CACHED TOKEN - ATTEMPTING LOGIN ==========");
+          mmToken = await loginToMattermost(config.mmAuth);
+          isCachedTokenUsed = false;
+          console.log("========== MM LOGIN SUCCESS ==========");
+
+          if (env.MM_KV) {
+            try {
+              // 180일 만료 시간에 근접한 안전 만료 시간(170일 = 14,688,000초) 설정 후 캐싱
+              await env.MM_KV.put("MM_SESSION_TOKEN", mmToken, { expirationTtl: 14688000 });
+              console.log("========== MM TOKEN CACHED TO CF KV ==========");
+            } catch (kvErr) {
+              console.log("Warning: Failed to write token to Cloudflare KV", kvErr.message);
+            }
+          }
+        }
+
+        let files = [];
+        try {
+          // 3. 획득한 세션 토큰을 사용하여 파일 다운로드 실행
+          for (const fileId of fileIds) {
+            const downloaded = await downloadMattermostFile({
+              baseUrl: config.mmAuth.baseUrl,
+              bearerToken: mmToken,
+              fileId
+            });
+            files.push(downloaded);
+          }
+        } catch (downloadErr) {
+          // 4. 기존 캐시 토큰 사용 중 401 Unauthorized(토큰 만료) 감지 시 자가 치유(Self-Healing) 작동
+          if (isCachedTokenUsed && (downloadErr.message.includes("401") || downloadErr.message.includes("Unauthorized"))) {
+            console.log("========== MM CACHED TOKEN EXPIRED (401) - SELF-HEALING TRIGERRED ==========");
+            
+            // 재로그인 및 신규 세션 토큰 획득
+            mmToken = await loginToMattermost(config.mmAuth);
+            console.log("========== MM RE-LOGIN SUCCESS ==========");
+
+            if (env.MM_KV) {
+              try {
+                await env.MM_KV.put("MM_SESSION_TOKEN", mmToken, { expirationTtl: 14688000 });
+                console.log("========== MM NEW TOKEN RE-CACHED TO CF KV ==========");
+              } catch (kvErr) {
+                console.log("Warning: Failed to update token to Cloudflare KV", kvErr.message);
+              }
+            }
+
+            // 새로운 토큰으로 다운로드 재시도
+            files = [];
+            for (const fileId of fileIds) {
+              const downloaded = await downloadMattermostFile({
+                baseUrl: config.mmAuth.baseUrl,
+                bearerToken: mmToken,
+                fileId
+              });
+              files.push(downloaded);
+            }
+          } else {
+            // 캐시 문제가 아니거나 재시도에서도 에러가 난 경우 최종 예외 전파
+            throw downloadErr;
+          }
         }
 
         console.log("========== FILES READY ==========");
@@ -243,8 +309,15 @@ export default {
       console.log(err?.stack || err?.message || String(err));
 
       return new Response(
-        `error: ${err?.message || String(err)}`,
-        { status: 500 }
+        JSON.stringify({
+          success: false,
+          error: "Internal Server Error",
+          message: "Mattermost integration worker encountered an unexpected error. Check Cloudflare logs for details."
+        }),
+        { 
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        }
       );
     }
   }
