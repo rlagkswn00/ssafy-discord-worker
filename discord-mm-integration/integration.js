@@ -370,7 +370,7 @@ async function checkMessageWithGemini(text, env) {
 
   try {
     const model = "gemini-1.5-flash";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
 
     const systemPrompt = `너는 SSAFY 15기 서울 13반 디스코드 채널의 공지사항 및 이벤트 연동 봇의 스마트 AI 검열관이다.
 이 봇은 교육생들에게 유용하고 가치 있는 공지사항, 공식 행사 알림, 채용/취업 정보, 혹은 주요 학사 일정 공유 메시지를 전달한다.
@@ -386,35 +386,20 @@ async function checkMessageWithGemini(text, env) {
    - 단순 리액션, 단순 인사 또는 단순 단답형 리액션 (예: '감사합니다!', '넵 확인했습니다', '화이팅!', '오우 좋네요').
    - 개인 친목 도모 성격의 쓸데없는 잡담, 도배성 광고, 또는 학업/공지 목적과 전혀 무관한 개인 신변 잡기적 글.
 
-반드시 약속된 JSON 포맷을 따라서 정답을 반환해라.`;
+[응답 규칙]
+설명이나 근거를 전혀 붙이지 말고 오직 단어 딱 하나 'PASS' 또는 'SPAM'으로만 대답해라.`;
 
     const requestBody = {
       contents: [
         {
           parts: [
-            { text: `System Prompt:\n${systemPrompt}\n\nInput Message:\n"${text}"` }
+            { text: `${systemPrompt}\n\n[Message to Evaluate]\n"${text}"` }
           ]
         }
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            decision: {
-              type: "STRING",
-              enum: ["PASS", "SPAM"]
-            },
-            reason: {
-              type: "STRING"
-            }
-          },
-          required: ["decision", "reason"]
-        }
-      }
+      ]
     };
 
-    console.log("========== SEND TO GEMINI ==========");
+    console.log("========== SEND TO GEMINI (SIMPLE TEXT OPTION) ==========");
     console.log(JSON.stringify({ textLength: text.length, textPreview: text.slice(0, 100) }, null, 2));
 
     const response = await fetch(url, {
@@ -439,13 +424,14 @@ async function checkMessageWithGemini(text, env) {
       return { decision: "PASS", reason: "Empty candidate response" };
     }
 
-    const result = JSON.parse(candidateText.trim());
-    console.log("========== GEMINI DECISION ==========");
-    console.log(JSON.stringify(result, null, 2));
+    const answer = candidateText.trim().toUpperCase();
+    console.log("========== GEMINI RESPONSE RAW ==========");
+    console.log(answer);
 
+    const isSpam = answer.includes("SPAM");
     return {
-      decision: result.decision || "PASS",
-      reason: result.reason || "Unknown reason"
+      decision: isSpam ? "SPAM" : "PASS",
+      reason: isSpam ? "AI 판독 결과 스팸 및 리액션성 낙서글로 차단되었습니다." : "AI 검열 통과"
     };
 
   } catch (err) {
