@@ -42,12 +42,14 @@ export default {
         return new Response("ignored", { status: 200 });
       }
 
-      if (source.category === "행사-이벤트") {
-        const minEventLength = 80; // 필요 시 이 값을 늘리거나 줄일 수 있습니다.
+      // "행사" 또는 "행사-이벤트" 카테고리에 한해, 첨부파일(사진 등)이 없을 때만 80자 제한 필터링 적용
+      if (source.category === "행사" || source.category === "행사-이벤트") {
+        const minEventLength = 80; // 필요 시 이 값을 조절하십시오.
         const trimmedLength = text.trim().length;
 
-        if (trimmedLength < minEventLength) {
-          console.log("========== SKIP SHORT EVENT MESSAGE ==========");
+        // 첨부파일(fileIds)이 아예 없는 순수 텍스트인데 80자 미만인 경우만 차단
+        if (trimmedLength < minEventLength && fileIds.length === 0) {
+          console.log("========== SKIP SHORT EVENT MESSAGE (NO ATTACHMENT) ==========");
           console.log(
             JSON.stringify(
               {
