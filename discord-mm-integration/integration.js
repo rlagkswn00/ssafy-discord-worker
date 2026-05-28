@@ -45,7 +45,20 @@ export default {
       // "행사" 또는 "행사-이벤트" 카테고리에 한해, 80자 미만의 글은 예외 없이 차단 (사진만 올린 글도 포함)
       if (source.category === "행사" || source.category === "행사-이벤트") {
         const minEventLength = 80; // 필요 시 이 값을 조절하십시오.
-        const trimmedLength = text.trim().length;
+
+        // [스마트 링크 소거 알고리즘] 사진만 단독 전송 시 강제 주입되는 링크 노이즈 문자열 소거
+        let cleanText = text || "";
+        // 1. 마크다운 이미지 링크 소거: ![이름](주소)
+        cleanText = cleanText.replace(/!\[.*?\]\(.*?\)/g, "");
+        // 2. 일반 마크다운 링크 소거: [이름](주소)
+        cleanText = cleanText.replace(/\[.*?\]\(.*?\)/g, "");
+        // 3. HTTP/HTTPS 일반 웹 주소 전체 소거
+        cleanText = cleanText.replace(/https?:\/\/[^\s]+/g, "");
+        // 4. Mattermost 내부 파일 다운로드 API 경로 소거
+        cleanText = cleanText.replace(/\/api\/v4\/files\/[^\s]+/g, "");
+
+        // 링크 주소들을 싹 걷어낸 순수 사용자의 텍스트 입력 글자 수 측정
+        const trimmedLength = cleanText.trim().length;
 
         // 글자수가 80자 미만이면 무조건 차단 (사진만 단독 업로드된 글자수 0자 글도 차단됩니다)
         if (trimmedLength < minEventLength) {
@@ -58,7 +71,7 @@ export default {
                 channelName,
                 trimmedLength,
                 minEventLength,
-                preview: text.slice(0, 120)
+                preview: cleanText.slice(0, 120)
               },
               null,
               2
